@@ -31,3 +31,15 @@
 # Debug files
 *.dSYM/
 *.su
+
+# ignore build dirs
+build
+
+# ingnore any executables
+bin/*
+
+# ignore mac specific files
+.DS_Store
+
+# ignore emacs temp files
+*~
