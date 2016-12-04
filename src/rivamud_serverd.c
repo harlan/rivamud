@@ -1,6 +1,9 @@
 #include <stdio.h>
+#include "network_listener.h"
 
 int main(int argc, char **argv) {
-  printf("Hello world\n");
+  int port = 8888;
+  start_server(port);
   return 0;
 }
+
