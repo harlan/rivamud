@@ -24,3 +24,18 @@ maintained on (sdf1.cc) was lost.
   (pthreads, tcpip).
 * Don't link in mysql, python or a bunch of cute opensource libraries to 
   make it easy.
+
+# Code layout
+# 
+# Startup sequence
+# - Loads up map data file
+# - Generates the world
+# - Starts listening on the network
+# - Waits for connections.
+# 
+# - Each player's connection has a "context".   Says their location in the world, current stack of context.
+# - The world ticks 10 times a second.
+# - Connections can send messages.  Which are parsed in "command" objects
+# - Each command object is evaluated against the context in the world.
+# - At the end of each ticket, each of the connected players is sent a
+#   message with updates if anything in their context changed.
