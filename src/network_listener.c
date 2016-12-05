@@ -81,14 +81,17 @@ int start_server(int port) {
   int c = sizeof(struct sockaddr_in);
   pthread_t thread_id;
 
-  while ((client_sock = accept(socket_desc, (struct sockaddr*)&client, (socklen_t*) &c))) {
+  while ((client_sock = accept(socket_desc, (struct sockaddr*)&client, 
+			       (socklen_t*) &c))) {
     char client_ip_str[200];
-    if (NULL == inet_ntop(client.sin_family, &client.sin_addr.s_addr, client_ip_str, sizeof(client_ip_str))) {
+    if (NULL == inet_ntop(client.sin_family, &client.sin_addr.s_addr, 
+			  client_ip_str, sizeof(client_ip_str))) {
       perror("Can't determine ip address of incoming connection");
     }
     printf("Connection accepted from %s\n", client_ip_str);
 
-    if (pthread_create(&thread_id, NULL, connection_handler, (void*)&client_sock) < 0) {
+    if (pthread_create(&thread_id, NULL, connection_handler, 
+		       (void*)&client_sock) < 0) {
       perror("Could not spawn thread to handle connection");
     }
   }
