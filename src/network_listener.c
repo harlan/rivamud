@@ -7,14 +7,25 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <netdb.h>
 #include "network_listener.h"
 
 void *connection_handler(void *socket_desc) {
   int sock = *(int*)socket_desc;
+  struct sockaddr_storage remoteaddr;
+  socklen_t remoteaddrlen;
   char *message = "Greetings!\n";
   const int buf_len = 10000;
   char read_buf[buf_len];
   int read_size;
+  char ipstr[INET6_ADDRSTRLEN];
+  char portstr[NI_MAXSERV];
+
+  remoteaddrlen = sizeof remoteaddr;
+  getpeername(sock, (struct sockaddr *)&remoteaddr, &remoteaddrlen);
+  getnameinfo((struct sockaddr *)&remoteaddr, remoteaddrlen,
+              ipstr, sizeof ipstr, portstr, sizeof portstr,
+              NI_NUMERICHOST | NI_NUMERICSERV);
 
   write(sock, message, strlen(message));
 
@@ -35,11 +46,13 @@ void *connection_handler(void *socket_desc) {
     memset(read_buf, 0, buf_len);
   }
 
-  if (0 == read_size) {
-    fprintf(stderr, "Client disconnected\n");
-  } else if (-1 == read_size) {
+  if (-1 == read_size) {
+    // TODO  not sure if this always indicates a connection error that
+    // requires the socket to be closed.  might be able to move this into
+    // recv loop and continue looping
     perror("recv failed");
   }
+  printf("server: client %s:%s disconnected\n", ipstr, portstr);
 
   if (0 > close(sock)) {
     perror("Error shutting down socket");
@@ -51,54 +64,86 @@ void *connection_handler(void *socket_desc) {
 
 int start_server(int port) {
   int socket_desc, client_sock;
-  struct sockaddr_in server, client;
-  
-  // Create socket
-  socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-  if (-1 == socket_desc) {
-    fprintf(stderr, "Could not create socket\n");
-    exit(1);
-  }
-  // prepare the sockaddr_in structure
-  server.sin_family = AF_INET;
-  server.sin_addr.s_addr = INADDR_ANY;
-  server.sin_port = htons(port);
+  char portstr[NI_MAXSERV];
+  char ipstr[INET6_ADDRSTRLEN];
+  int rv;
+  int yes=1;
+  struct addrinfo hints, *ai, *p;
+  struct sockaddr_storage remoteaddr;
+  socklen_t remoteaddrlen;
 
-  // bind to port
-  if (bind(socket_desc, (struct sockaddr*) &server, sizeof(server)) < 0) {
-    perror("Bind failed");
+  snprintf(portstr, NI_MAXSERV, "%d", port);
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family   = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags    = AI_PASSIVE;
+  if ( (rv=getaddrinfo(NULL, portstr, &hints, &ai)) != 0 ) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
     exit(1);
   }
+
+  for (p = ai; p != NULL; p = p->ai_next) {
+    socket_desc = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (socket_desc == -1) {
+      perror("server: socket");
+      continue;
+    }
+
+    rv = setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    if (rv == -1) {
+      perror("setsockopt");
+      exit(2);
+    }
+
+    rv = bind(socket_desc, p->ai_addr, p->ai_addrlen);
+    if (rv == -1) {
+      perror("server: bind");
+      close(socket_desc);
+      continue;
+    }
+
+    break;
+  }
+
+  if (p == NULL) {
+    fprintf(stderr, "server: could not bind\n");
+    exit(2);
+  }
+  getnameinfo(p->ai_addr, p->ai_addrlen,
+      ipstr, sizeof ipstr, portstr, sizeof portstr,
+      NI_NUMERICHOST | NI_NUMERICSERV);
+  freeaddrinfo(ai);
 
   // listen
-  int max_connections_backlog = 3;
-  if (0 != listen(socket_desc, max_connections_backlog)) {
-    perror("Error listening to socket");
+  if ((rv = listen(socket_desc, BACKLOG)) == -1) {
+    perror("server: listen");
+    exit(2);
   }
-  
-  // accept and incoming connection
-  printf("Waiting for incoming connections on port %d.\n", port);
-  int c = sizeof(struct sockaddr_in);
+  printf("server: listening on %s:%s...\n", ipstr, portstr);
+
   pthread_t thread_id;
 
-  while ((client_sock = accept(socket_desc, (struct sockaddr*)&client, 
-			       (socklen_t*) &c))) {
-    char client_ip_str[200];
-    if (NULL == inet_ntop(client.sin_family, &client.sin_addr.s_addr, 
-			  client_ip_str, sizeof(client_ip_str))) {
-      perror("Can't determine ip address of incoming connection");
+  // accept connections
+  while (1) {
+    remoteaddrlen = sizeof remoteaddr;
+    client_sock = accept(socket_desc, (struct sockaddr *)&remoteaddr,
+                         &remoteaddrlen);
+    if (client_sock == -1) {
+      perror("accept");
+      continue;
     }
-    printf("Connection accepted from %s\n", client_ip_str);
+
+    getnameinfo((struct sockaddr *)&remoteaddr, remoteaddrlen,
+        ipstr, sizeof ipstr, portstr, sizeof portstr,
+        NI_NUMERICHOST | NI_NUMERICSERV);
+    printf("server: accepted connection from %s:%s\n", ipstr, portstr);
 
     if (pthread_create(&thread_id, NULL, connection_handler, 
 		       (void*)&client_sock) < 0) {
       perror("Could not spawn thread to handle connection");
     }
   }
-  if (client_sock < 0) {
-    perror("Failed accepting incoming connection from socket");
-    exit(1);
-  }
-  
+
   return 0;
 }
