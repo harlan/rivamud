@@ -10,6 +10,22 @@
 #include <netdb.h>
 #include "network_listener.h"
 
+int sendall(int sockfd, char *buf, int *len) {
+  int nleft = *len;
+  int total = 0;
+  int n;
+
+  while (total < *len) {
+    n = send(sockfd, buf+total, nleft, 0);
+    total += n;
+    nleft -= n;
+  }
+
+  *len = total;
+
+  return n==-1?-1:0;
+}
+
 void *connection_handler(void *socket_desc) {
   int sock = *(int*)socket_desc;
   struct sockaddr_storage remoteaddr;
@@ -20,6 +36,7 @@ void *connection_handler(void *socket_desc) {
   int read_size;
   char ipstr[INET6_ADDRSTRLEN];
   char portstr[NI_MAXSERV];
+  int len;
 
   remoteaddrlen = sizeof remoteaddr;
   getpeername(sock, (struct sockaddr *)&remoteaddr, &remoteaddrlen);
@@ -27,14 +44,23 @@ void *connection_handler(void *socket_desc) {
               ipstr, sizeof ipstr, portstr, sizeof portstr,
               NI_NUMERICHOST | NI_NUMERICSERV);
 
-  write(sock, message, strlen(message));
+  len = strlen(message);
+  if (sendall(sock, message, &len) == -1) {
+    perror("send");  // are send errors fatal ?
+    fprintf(stderr, "server: send error to %s:%s", ipstr, portstr);
+  }
 
   // Receive a message from the client
   int did_find_end = 0;
   while (!did_find_end && (read_size = recv(sock, read_buf, buf_len, 0)) > 0) {
     read_buf[read_size] = '\0';
+
     // send message back to client
-    write(sock, read_buf, strlen(read_buf));
+    len = strlen(read_buf);
+    if (sendall(sock, read_buf, &len) == -1) {
+      perror("send");
+      fprintf(stderr, "server: send error to %s:%s", ipstr, portstr);
+    }
 
     for (int i = 0; i < read_size; i++) {
       char eof = '\0';
