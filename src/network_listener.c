@@ -28,8 +28,8 @@ int sendall(int sockfd, char *buf, int *len) {
 
 void *connection_handler(void *socket_desc) {
   int sock = *(int*)socket_desc;
-  struct sockaddr_storage remoteaddr;
-  socklen_t remoteaddrlen;
+  struct sockaddr_storage ss;
+  socklen_t sslen;
   char *message = "Greetings!\n";
   const int buf_len = 10000;
   char read_buf[buf_len];
@@ -38,9 +38,9 @@ void *connection_handler(void *socket_desc) {
   char portstr[NI_MAXSERV];
   int len;
 
-  remoteaddrlen = sizeof remoteaddr;
-  getpeername(sock, (struct sockaddr *)&remoteaddr, &remoteaddrlen);
-  getnameinfo((struct sockaddr *)&remoteaddr, remoteaddrlen,
+  sslen = sizeof ss;
+  getpeername(sock, (struct sockaddr *)&ss, &sslen);
+  getnameinfo((struct sockaddr *)&ss, sslen,
               ipstr, sizeof ipstr, portstr, sizeof portstr,
               NI_NUMERICHOST | NI_NUMERICSERV);
 
@@ -95,8 +95,8 @@ int start_server(int port) {
   int rv;
   int yes=1;
   struct addrinfo hints, *ai, *p;
-  struct sockaddr_storage remoteaddr;
-  socklen_t remoteaddrlen;
+  struct sockaddr_storage ss;
+  socklen_t sslen;
 
   snprintf(portstr, NI_MAXSERV, "%d", port);
 
@@ -152,15 +152,15 @@ int start_server(int port) {
 
   // accept connections
   while (1) {
-    remoteaddrlen = sizeof remoteaddr;
-    client_sock = accept(listenfd, (struct sockaddr *)&remoteaddr,
-                         &remoteaddrlen);
+    sslen = sizeof ss;
+    client_sock = accept(listenfd, (struct sockaddr *)&ss,
+                         &sslen);
     if (client_sock == -1) {
       perror("accept");
       continue;
     }
 
-    getnameinfo((struct sockaddr *)&remoteaddr, remoteaddrlen,
+    getnameinfo((struct sockaddr *)&ss, sslen,
         ipstr, sizeof ipstr, portstr, sizeof portstr,
         NI_NUMERICHOST | NI_NUMERICSERV);
     printf("server: accepted connection from %s:%s\n", ipstr, portstr);
