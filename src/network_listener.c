@@ -89,7 +89,7 @@ void *connection_handler(void *socket_desc) {
 }
 
 int start_server(int port) {
-  int socket_desc, client_sock;
+  int listenfd, client_sock;
   char portstr[NI_MAXSERV];
   char ipstr[INET6_ADDRSTRLEN];
   int rv;
@@ -110,22 +110,22 @@ int start_server(int port) {
   }
 
   for (p = ai; p != NULL; p = p->ai_next) {
-    socket_desc = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-    if (socket_desc == -1) {
+    listenfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (listenfd == -1) {
       perror("server: socket");
       continue;
     }
 
-    rv = setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    rv = setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
     if (rv == -1) {
       perror("setsockopt");
       exit(2);
     }
 
-    rv = bind(socket_desc, p->ai_addr, p->ai_addrlen);
+    rv = bind(listenfd, p->ai_addr, p->ai_addrlen);
     if (rv == -1) {
       perror("server: bind");
-      close(socket_desc);
+      close(listenfd);
       continue;
     }
 
@@ -142,7 +142,7 @@ int start_server(int port) {
   freeaddrinfo(ai);
 
   // listen
-  if ((rv = listen(socket_desc, BACKLOG)) == -1) {
+  if ((rv = listen(listenfd, BACKLOG)) == -1) {
     perror("server: listen");
     exit(2);
   }
@@ -153,7 +153,7 @@ int start_server(int port) {
   // accept connections
   while (1) {
     remoteaddrlen = sizeof remoteaddr;
-    client_sock = accept(socket_desc, (struct sockaddr *)&remoteaddr,
+    client_sock = accept(listenfd, (struct sockaddr *)&remoteaddr,
                          &remoteaddrlen);
     if (client_sock == -1) {
       perror("accept");
