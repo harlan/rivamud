@@ -39,11 +39,22 @@ static char *trim(char *str) {
   return start;
 }
 
+// this just normalizes, it doesn't validate
+static char *normalize_name(char *name) {
+  name = trim(name);
+  len = strlen(name);
+
+  name[0] = toupper(name[0]);
+  for (int i = 1; i < len; i++)
+    name[i] = tolower(name[i]);
+
+  return name;
+}
+
 User *user_login(int sockfd) {
   char recvBuf[256];    // this is random, the bufsize should be set once we
                         // encapsulate recv calls
   char sendBuf[32];
-  int sendlen;
   char *name;
   int nbytes;
   int namelen;
@@ -63,7 +74,7 @@ User *user_login(int sockfd) {
       return NULL;
 
     recvBuf[MAX_NAME_LEN] = '\0';
-    name = trim(recvBuf);
+    name = normalize_name(recvBuf);
     namelen = strlen(name);
     if (namelen < MIN_NAME_LEN || namelen > MAX_NAME_LEN)
       continue;
@@ -72,6 +83,7 @@ User *user_login(int sockfd) {
     // TODO do some more name verification, keep asking for login until
     // we find a suitable name
   }
+
   me = user_create(name, sockfd);
   return me;
 }
