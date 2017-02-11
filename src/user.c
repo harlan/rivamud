@@ -156,7 +156,7 @@ int user_thread_handler(User *user) {
   FD_ZERO(&m_readfds);
   FD_ZERO(&m_writefds);
   FD_ZERO(&readfds);
-  FD_ZERO(&readfds);
+  FD_ZERO(&writefds);
   FD_SET(sockfd, &m_readfds);
   FD_SET(mq, &m_readfds);
   fdmax = sockfd > mq ? sockfd : mq;
