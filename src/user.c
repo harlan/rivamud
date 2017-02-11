@@ -32,7 +32,7 @@ static char *trim(char *str) {
   end = start + strlen(start) - 1;
   while (end > start && !isalnum(*end)) end--;
   end++;
-  end = '\0';
+  *end = '\0';
 
   return start;
 }
