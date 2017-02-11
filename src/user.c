@@ -12,6 +12,7 @@
 #include <sys/select.h>
 #include "user.h"
 #include "network_listener.h"
+#include "network_util.h"
 #include "messaging.h"
 
 
@@ -41,6 +42,8 @@ static char *trim(char *str) {
 
 // this just normalizes, it doesn't validate
 static char *normalize_name(char *name) {
+  int len;
+
   name = trim(name);
   len = strlen(name);
 
@@ -62,15 +65,10 @@ User *user_login(int sockfd) {
 
   while (1) {
     sprintf(sendBuf, "Login: ");
-    sendlen = strlen(sendBuf) + 1;
-    sendall(sockfd, sendBuf, &sendlen);
+    sendline(sockfd, sendBuf, strlen(sendBuf) + 1);
     // TODO wrap recv calls
-    nbytes = recv(sockfd, recvBuf, sizeof recvBuf, 0);
-    if (nbytes < 1) {
-      perror("recv");
-      return NULL;
-    }
-    if (nbytes == 0)
+    nbytes = readline(sockfd, recvBuf, sizeof recvBuf);
+    if (nbytes <= 0)
       return NULL;
 
     recvBuf[MAX_NAME_LEN] = '\0';
@@ -83,6 +81,9 @@ User *user_login(int sockfd) {
     // TODO do some more name verification, keep asking for login until
     // we find a suitable name
   }
+  sendline(sockfd, "Welcome ", 8);
+  sendline(sockfd, name, namelen);
+  sendline(sockfd, "!\r\n", 3);
 
   me = user_create(name, sockfd);
   return me;
@@ -153,8 +154,6 @@ int user_thread_handler(User *me) {
   fd_set m_readfds, m_writefds, readfds, writefds;
   int recvbytes;
   char recvbuf[MAX_BUF_SIZE];
-  int sendbytes; // not used yet
-  char sendbuf[MAX_BUF_SIZE]; // not used yet
   char msgbuf[MAX_BUF_SIZE];
   char *trimmed;
   int msglen;
@@ -179,12 +178,8 @@ int user_thread_handler(User *me) {
 
     for (; nready > 0; nready--) {
       if (FD_ISSET(sockfd, &readfds)) {
-        recvbytes = recv(sockfd, recvbuf, (sizeof recvbuf) - 1, 0);
-        if (recvbytes < 0) {
-          perror("recv");
-          break;
-        }
-        if (recvbytes == 0) {
+        recvbytes = readline(sockfd, recvbuf, (sizeof recvbuf) - 1);
+        if (recvbytes <= 0) {
           closed_connection = 1;
           break;
         }
@@ -210,7 +205,7 @@ int user_thread_handler(User *me) {
         // handle pipe
         msglen = read(me->pfds[0], msgbuf, sizeof msgbuf);
         printf("%d bytes in pipe\n", msglen);
-        sendall(sockfd, msgbuf, &msglen);
+        sendline(sockfd, msgbuf, msglen);
 
         continue;
       }

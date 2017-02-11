@@ -9,25 +9,8 @@
 #include <unistd.h>
 #include <netdb.h>
 #include "network_listener.h"
+#include "network_util.h"
 #include "user.h"
-
-// this needs to be rewritten to nonblock the send and use a local buffer
-// for anything not sent
-int sendall(int sockfd, char *buf, int *len) {
-  int nleft = *len;
-  int total = 0;
-  int n;
-
-  while (total < *len) {
-    n = send(sockfd, buf+total, nleft, 0);
-    total += n;
-    nleft -= n;
-  }
-
-  *len = total;
-
-  return n==-1?-1:0;
-}
 
 void *connection_handler(void *socket_desc) {
   int sock = *(int*)socket_desc;
