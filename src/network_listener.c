@@ -9,7 +9,10 @@
 #include <unistd.h>
 #include <netdb.h>
 #include "network_listener.h"
+#include "user.h"
 
+// this needs to be rewritten to nonblock the send and use a local buffer
+// for anything not sent
 int sendall(int sockfd, char *buf, int *len) {
   int nleft = *len;
   int total = 0;
@@ -30,13 +33,9 @@ void *connection_handler(void *socket_desc) {
   int sock = *(int*)socket_desc;
   struct sockaddr_storage ss;
   socklen_t sslen;
-  char *message = "Greetings!\n";
-  const int buf_len = 10000;
-  char read_buf[buf_len];
-  int read_size;
   char ipstr[INET6_ADDRSTRLEN];
   char portstr[NI_MAXSERV];
-  int len;
+  User *me;
 
   sslen = sizeof ss;
   getpeername(sock, (struct sockaddr *)&ss, &sslen);
@@ -44,41 +43,8 @@ void *connection_handler(void *socket_desc) {
               ipstr, sizeof ipstr, portstr, sizeof portstr,
               NI_NUMERICHOST | NI_NUMERICSERV);
 
-  len = strlen(message);
-  if (sendall(sock, message, &len) == -1) {
-    perror("send");  // are send errors fatal ?
-    fprintf(stderr, "server: send error to %s:%s", ipstr, portstr);
-  }
-
-  // Receive a message from the client
-  int did_find_end = 0;
-  while (!did_find_end && (read_size = recv(sock, read_buf, buf_len, 0)) > 0) {
-    read_buf[read_size] = '\0';
-
-    // send message back to client
-    len = strlen(read_buf);
-    if (sendall(sock, read_buf, &len) == -1) {
-      perror("send");
-      fprintf(stderr, "server: send error to %s:%s", ipstr, portstr);
-    }
-
-    for (int i = 0; i < read_size; i++) {
-      char eof = '\0';
-      char end_of_transmission = '\4';
-      if (read_buf[i] == eof || read_buf[i] == end_of_transmission) {
-	did_find_end = 1;
-      }
-    }
-    memset(read_buf, 0, buf_len);
-  }
-
-  if (-1 == read_size) {
-    // TODO  not sure if this always indicates a connection error that
-    // requires the socket to be closed.  might be able to move this into
-    // recv loop and continue looping
-    perror("recv failed");
-  }
-  printf("server: client %s:%s disconnected\n", ipstr, portstr);
+  if ((me = user_login(sock)) != NULL)
+    user_thread_handler(me);
 
   if (0 > close(sock)) {
     perror("Error shutting down socket");

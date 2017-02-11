@@ -5,4 +5,6 @@
 
 int start_server(int port);
 
+int sendall(int sockfd, char *buf, int *len);
+
 #endif
