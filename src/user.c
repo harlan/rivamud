@@ -172,6 +172,8 @@ int user_thread_handler(User *me) {
     readfds = m_readfds;
     writefds = m_writefds;
     if ((nready = select(fdmax+1, &readfds, NULL, NULL, NULL)) < 1) {
+      if (errno == EINTR)
+        continue;
       perror("select");
       break;
     }
