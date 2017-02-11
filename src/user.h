@@ -1,8 +1,6 @@
 #ifndef _USER_H
 #define _USER_H
 
-#include <mqueue.h> // this will change to "message_queue.h" once that's finished
-
 #define MAX_NAME_LEN 10
 #define MIN_NAME_LEN 3
 
@@ -13,7 +11,7 @@ typedef struct User {
   char *name;
   int   id;             // not used yet
   int   sockfd;
-  mqd_t mq;
+  int   pfds[2];        // pfds[0] is read, pfds[1] is write
   struct User *next;
 } User;
 

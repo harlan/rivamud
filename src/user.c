@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -8,9 +9,10 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include "user.h"
 #include "network_listener.h"
-#include "message_queue.h"
+#include "messaging.h"
 
 
 static int user_add_allUsers(User *user);
@@ -83,9 +85,7 @@ User *user_create(char *name, int sockfd) {
 
   newUser->sockfd = sockfd;
   newUser->name   = strdup(name);
-  newUser->mq     = mq_create(sockfd);
-
-  if (newUser->mq < 0)
+  if (msg_create(newUser->pfds) == -1)
     return NULL;
 
   user_add_allUsers(newUser);
@@ -110,7 +110,6 @@ int user_destroy(User *user) {
   User dummy;
   User *currentUser;
   User *prev;
-  char mqname[255]; // shouldnt' be more than like 10 chars
 
   pthread_rwlock_wrlock(&allUsersLock);
 
@@ -129,27 +128,24 @@ int user_destroy(User *user) {
   prev = currentUser->next;
   pthread_rwlock_unlock(&allUsersLock);
 
-  snprintf(mqname, sizeof mqname, "/%d", currentUser->sockfd);
-  mq_close(currentUser->mq);
-  mq_unlink(mqname);
+  msg_destroy(currentUser->pfds);
   free(currentUser->name);
   free(currentUser);
 
   return 1;
 }
 
-int user_thread_handler(User *user) {
-  int sockfd = user->sockfd;
-  mqd_t mq = user->mq;
+int user_thread_handler(User *me) {
+  int sockfd = me->sockfd;
   int fdmax;
   fd_set m_readfds, m_writefds, readfds, writefds;
   int recvbytes;
   char recvbuf[MAX_BUF_SIZE];
   int sendbytes; // not used yet
   char sendbuf[MAX_BUF_SIZE]; // not used yet
-  char mqbuf[MAX_BUF_SIZE];
+  char msgbuf[MAX_BUF_SIZE];
   char *trimmed;
-  int mqlen;
+  int msglen;
   int nready;
   int closed_connection = 0;
 
@@ -158,8 +154,8 @@ int user_thread_handler(User *user) {
   FD_ZERO(&readfds);
   FD_ZERO(&writefds);
   FD_SET(sockfd, &m_readfds);
-  FD_SET(mq, &m_readfds);
-  fdmax = sockfd > mq ? sockfd : mq;
+  FD_SET(me->pfds[0], &m_readfds);
+  fdmax = sockfd > me->pfds[0] ? sockfd : me->pfds[0];
 
   while (1) {
     readfds = m_readfds;
@@ -187,9 +183,9 @@ int user_thread_handler(User *user) {
         recvbuf[recvbytes] = '\0';
         trimmed = trim(recvbuf);
         if (strlen(trimmed) > 0) {
-          mqlen = snprintf(mqbuf, sizeof mqbuf, "%s says, %s\r\n",
-                           user->name, trimmed);
-          mq_broadcast(mq, RM_SCOPE_ALL, 0, mqbuf, mqlen+1, 0);
+          msglen = snprintf(msgbuf, sizeof msgbuf, "%s says, %s\r\n",
+                            me->name, trimmed);
+          msg_broadcast(me, RM_SCOPE_ALL, 0, msgbuf, msglen+1);
         }
 
         continue;
@@ -198,12 +194,11 @@ int user_thread_handler(User *user) {
         // handle socket writes
         continue;
       }
-      if (FD_ISSET(mq, &readfds)) {
-        // handle mq
-        mqlen = mq_receive(mq, mqbuf, sizeof mqbuf, NULL);
-        printf("%d bytes in mq\n", mqlen);
-        mqlen--; // don't need to send \0
-        sendall(sockfd, mqbuf, &mqlen);
+      if (FD_ISSET(me->pfds[0], &readfds)) {
+        // handle pipe
+        msglen = read(me->pfds[0], msgbuf, sizeof msgbuf);
+        printf("%d bytes in pipe\n", msglen);
+        sendall(sockfd, msgbuf, &msglen);
 
         continue;
       }
@@ -212,7 +207,7 @@ int user_thread_handler(User *user) {
       break;
   }
 
-  user_destroy(user);
+  user_destroy(me);
 
   return 1;
 }
