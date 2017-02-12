@@ -44,3 +44,7 @@ bin/*
 # ignore emacs temp files
 *~
 \#*\#
+
+# vim
+*.swp
+*.vimrc
