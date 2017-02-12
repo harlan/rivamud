@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/select.h>
+#include <errno.h>
 #include "user.h"
 #include "network_listener.h"
 #include "network_util.h"
