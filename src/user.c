@@ -15,12 +15,21 @@
 #include "network_util.h"
 #include "messaging.h"
 
-
-static int user_add_allUsers(User *user);
-static char *trim(char *str);
-
 User *allUsers = NULL;
 pthread_rwlock_t allUsersLock = PTHREAD_RWLOCK_INITIALIZER;
+
+/**
+ * some exposed functions are wrappers around internal static _functions
+ * the wrappers are to lock before and after the static _function call
+ *
+ * this is provided so that other user functions in this file can call
+ * the static _function without requesting a lock, in the case that the
+ * caller is already holding a lock
+ */
+
+static int user_add_allUsers(User *user);
+static User *_user_find_by_name(char *name);
+static char *trim(char *str);
 
 static char *trim(char *str) {
   char *start, *end;
@@ -38,6 +47,33 @@ static char *trim(char *str) {
   *end = '\0';
 
   return start;
+}
+
+static User *_user_find_by_name(char *name) {
+  User *current;
+
+  for (current = allUsers; current != NULL; current = current->next) {
+    if (strcmp(name, current->name) == 0)
+      break;
+  }
+
+  if (current == NULL)
+    return NULL;
+
+  return current;
+}
+
+
+User *user_find_by_name(char *name) {
+  User *user;
+
+  pthread_rwlock_rdlock(&allUsersLock);
+
+  user = _user_find_by_name(name);
+
+  pthread_rwlock_unlock(&allUsersLock);
+
+  return user;
 }
 
 // this just normalizes, it doesn't validate
@@ -117,7 +153,6 @@ static int user_add_allUsers(User *user) {
 
   return 1;
 }
-
 
 int user_destroy(User *user) {
   User dummy;
