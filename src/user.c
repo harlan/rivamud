@@ -135,8 +135,10 @@ int user_destroy(User *user) {
     prev = prev->next;
     currentUser = currentUser->next;
   }
-  if (currentUser == NULL) // lol wut
+  if (currentUser == NULL) {// lol wut
+    pthread_rwlock_unlock(&allUsersLock);
     return -1;
+  }
 
   prev = currentUser->next;
   pthread_rwlock_unlock(&allUsersLock);
