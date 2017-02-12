@@ -1,5 +1,5 @@
-#ifndef _MESSAGE_QUEUE_H
-#define _MESSAGE_QUEUE_H
+#ifndef _MESSAGING_H
+#define _MESSAGING_H
 
 #include "user.h"
 
