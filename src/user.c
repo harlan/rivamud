@@ -15,6 +15,7 @@
 #include "network_listener.h"
 #include "network_util.h"
 #include "messaging.h"
+#include "string_util.h"
 
 User *allUsers = NULL;
 pthread_rwlock_t allUsersLock = PTHREAD_RWLOCK_INITIALIZER;
@@ -30,25 +31,6 @@ pthread_rwlock_t allUsersLock = PTHREAD_RWLOCK_INITIALIZER;
 
 static int user_add_allUsers(User *user);
 static User *_user_find_by_name(char *name);
-static char *trim(char *str);
-
-static char *trim(char *str) {
-  char *start, *end;
-
-  start = str;
-  while (!isalnum(*start)) {
-    if (*start == '\0')
-      return start;
-    start++;
-  }
-
-  end = start + strlen(start) - 1;
-  while (end > start && !isalnum(*end)) end--;
-  end++;
-  *end = '\0';
-
-  return start;
-}
 
 static User *_user_find_by_name(char *name) {
   User *current;
